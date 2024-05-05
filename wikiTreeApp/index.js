@@ -1,20 +1,26 @@
 const express = require('express')
-const { readFile } = require('fs')
+const { readFile } = require('fs').promises
+const browserSync = require('browser-sync') //remove this later
+
 
 const app = express()
+const bs = browserSync.create() //remove this later
 
-app.get('/', (req, res) => {
+app.use(express.static('public'))
 
-    readFile('routes/index.html', 'utf8', (err, html) => {
-        if (err) {
-            res.status(500).send('Sorry, out of order')
-        }
+app.get('/', async (req, res) => {
 
-        res.send(html)
-    })
+    res.send( await readFile( 'routes/index.html', 'utf8' ) )
 
 });
 
 app.listen(3000, () => {
     console.log('Server is running on http://localhost:3000')
 })
+
+// Run Browsersync as a middleware
+bs.init({
+    proxy: 'http://localhost:3000',
+    files: ['public/**/*.*', 'routes/**/*.*'],
+    port: 5000,
+});
