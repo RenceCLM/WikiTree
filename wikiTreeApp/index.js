@@ -1,26 +1,117 @@
-const express = require('express')
-const { readFile } = require('fs').promises
-const browserSync = require('browser-sync') //remove this later
+const express = require('express');
+const { readFile } = require('fs').promises;
+const axios = require('axios');
+const sqlite3 = require('sqlite3').verbose();
+const browserSync = require('browser-sync');
 
+const app = express();
+const bs = browserSync.create();
 
-const app = express()
-const bs = browserSync.create() //remove this later
+const MAX_LINKS = 100; // Maximum number of links to send back to the client
+const FETCH_EXISTING_ARTICLES = false; // Set to true to fetch links for existing articles
 
-app.use(express.static('public'))
+// Create a database connection
+let db = new sqlite3.Database('./db/nodes.db', (err) => {
+  if (err) {
+    console.error(err.message);
+  }
+  console.log('Connected to the nodes database.');
+});
+
+// Create the nodes table if it doesn't exist
+db.run(`CREATE TABLE IF NOT EXISTS nodes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  article TEXT NOT NULL,
+  UNIQUE(name, article)
+)`);
+
+app.use(express.static('public'));
 
 app.get('/', async (req, res) => {
-
     res.send( await readFile( 'routes/index.html', 'utf8' ) )
+});
 
+// Add a new route to fetch and store links from a Wikipedia article
+app.get('/fetch/:article', async (req, res) => {
+  const article = req.params.article;
+
+  // Check if the article already exists in the database
+  const existingArticle = await new Promise((resolve, reject) => {
+    db.get('SELECT * FROM nodes WHERE article = ?', [article], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+
+  if (existingArticle && !FETCH_EXISTING_ARTICLES) {
+    console.log(`Article ${article} already exists in the database, skipping fetch.`);
+  } else {
+    // Fetch data from the Wikipedia API
+    const response = await axios.get('https://en.wikipedia.org/w/api.php', {
+      params: {
+        action: 'query',
+        titles: article,
+        prop: 'links',
+        format: 'json',
+        pllimit: 'max'
+      }
+    });
+
+    const pages = response.data.query.pages;
+    const pageId = Object.keys(pages)[0];
+    const links = pages[pageId].links;
+
+    // Insert the links into the database
+    for (const link of links) {
+      db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
+        if (err) {
+          return console.log(err.message);
+        }
+        if (this.changes > 0) {
+          console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
+        } else {
+          console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
+        }
+      });
+    }
+  }
+
+  // Retrieve the first MAX_LINKS number of links for the specified article
+  db.all('SELECT * FROM nodes WHERE article = ? LIMIT ?', [article, MAX_LINKS], (err, rows) => {
+    if (err) {
+      throw err;
+    }
+    const nodes = rows.map(row => ({
+      data: {
+        id: row.id,
+        name: row.name
+      }
+    }));
+    res.json(nodes);
+  });
 });
 
 app.listen(3000, () => {
     console.log('Server is running on http://localhost:3000')
-})
+});
 
 // Run Browsersync as a middleware
 bs.init({
     proxy: 'http://localhost:3000',
     files: ['public/**/*.*', 'routes/**/*.*'],
     port: 5000,
+});
+
+// Don't forget to close the database connection when your app shuts down
+process.on('exit', () => {
+  db.close((err) => {
+    if (err) {
+      console.error(err.message);
+    }
+    console.log('Close the database connection.');
+  });
 });
