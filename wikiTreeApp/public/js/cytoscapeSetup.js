@@ -187,16 +187,19 @@ document.addEventListener("DOMContentLoaded", function() {
                 })).concat(links.map(link => ({
                     data: { source: node.data('id'), target: link.data.name }
                 })));
-    
+            
                 const eles = cy.add(newElements);
-                const nodePositions = node.position();
-                // Run the circular layout on the new nodes
+            
+                // Run the circular layout on the new nodes to calculate their final positions
                 eles.layout({
                     name: 'circle',
-                    boundingBox: { x1: nodePositions.x-100, y1: nodePositions.y-100, x2: nodePositions.x+100, y2: nodePositions.y+100 },
+                    boundingBox: { x1: node.position('x'), y1: node.position('y'), x2: node.position('x'), y2: node.position('y') },
+                    animate: true,
+                    duration: 100000,
+                    fit: false,
                 }).run();
                 saveState();
-    
+
             })
             .catch(e => {
                 console.log('There was a problem with your fetch operation: ' + e.message);
