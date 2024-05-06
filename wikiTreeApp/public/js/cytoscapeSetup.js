@@ -48,6 +48,8 @@ document.addEventListener("DOMContentLoaded", function() {
                             y: elePosition.y + index * 50 - totalHeight / 2 // Center the nodes on the y-axis of the selected node
                         };
                     },
+                    animate: true,
+                    animationDuration: 1000,
                     fit: false // Prevents the viewport from being adjusted
                 });
                 layout.run();
@@ -195,7 +197,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     name: 'circle',
                     boundingBox: { x1: node.position('x'), y1: node.position('y'), x2: node.position('x'), y2: node.position('y') },
                     animate: true,
-                    duration: 100000,
+                    animationDuration: 1000,
                     fit: false,
                 }).run();
                 saveState();
