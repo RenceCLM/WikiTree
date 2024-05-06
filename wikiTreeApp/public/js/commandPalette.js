@@ -6,6 +6,7 @@ window.addEventListener('keydown', function(event) { // Listen for Ctrl+P or Cmd
     if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
         event.preventDefault();
         commandPalette.focus();
+        console.log("Ctrl+P pressed")
     }
 });
 

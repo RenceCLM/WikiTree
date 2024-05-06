@@ -2,12 +2,11 @@ const express = require('express');
 const { readFile } = require('fs').promises;
 const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
-const browserSync = require('browser-sync');
 
 const app = express();
-const bs = browserSync.create();
 
-const MAX_LINKS = 1000; // Maximum number of links to send back to the client
+// const MAX_LINKS = 1463; // Maximum number of links to send back to the client
+const MAX_LINKS = 10000; // Maximum number of links to send back to the client
 const FETCH_EXISTING_ARTICLES = false; // Set to true to fetch links for existing articles
 
 // Create a database connection
@@ -78,18 +77,24 @@ app.get('/fetch/:article', async (req, res) => {
       }
 
       // Insert the links into the database
-      for (const link of links) {
-        db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
-          if (err) {
-            return console.log(err.message);
-          }
-          if (this.changes > 0) {
-            console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
-          } else {
-            console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
-          }
+      const insertPromises = links.map(link => {
+        return new Promise((resolve, reject) => {
+          db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
+            if (err) {
+              reject(err);
+            } else {
+              if (this.changes > 0) {
+                console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
+              } else {
+                console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
+              }
+              resolve();
+            }
+          });
         });
-      }
+      });
+
+      await Promise.all(insertPromises);
 
       continueParam = response.data.continue?.plcontinue;
     } while (continueParam);
@@ -112,13 +117,6 @@ app.get('/fetch/:article', async (req, res) => {
 
 app.listen(3000, () => {
     console.log('Server is running on http://localhost:3000')
-});
-
-// Run Browsersync as a middleware
-bs.init({
-    proxy: 'http://localhost:3000',
-    files: ['public/**/*.*', 'routes/**/*.*'],
-    port: 5000,
 });
 
 // Don't forget to close the database connection when your app shuts down
