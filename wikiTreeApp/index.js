@@ -7,7 +7,7 @@ const browserSync = require('browser-sync');
 const app = express();
 const bs = browserSync.create();
 
-const MAX_LINKS = 100; // Maximum number of links to send back to the client
+const MAX_LINKS = 1000; // Maximum number of links to send back to the client
 const FETCH_EXISTING_ARTICLES = false; // Set to true to fetch links for existing articles
 
 // Create a database connection
@@ -32,6 +32,10 @@ app.get('/', async (req, res) => {
     res.send( await readFile( 'routes/index.html', 'utf8' ) )
 });
 
+app.get('/text', async (req, res) => {
+    res.send( await readFile( 'routes/text.html', 'utf8' ) )
+});
+
 // Add a new route to fetch and store links from a Wikipedia article
 app.get('/fetch/:article', async (req, res) => {
   const article = req.params.article;
@@ -50,34 +54,45 @@ app.get('/fetch/:article', async (req, res) => {
   if (existingArticle && !FETCH_EXISTING_ARTICLES) {
     console.log(`Article ${article} already exists in the database, skipping fetch.`);
   } else {
-    // Fetch data from the Wikipedia API
-    const response = await axios.get('https://en.wikipedia.org/w/api.php', {
-      params: {
-        action: 'query',
-        titles: article,
-        prop: 'links',
-        format: 'json',
-        pllimit: 'max'
-      }
-    });
-
-    const pages = response.data.query.pages;
-    const pageId = Object.keys(pages)[0];
-    const links = pages[pageId].links;
-
-    // Insert the links into the database
-    for (const link of links) {
-      db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
-        if (err) {
-          return console.log(err.message);
-        }
-        if (this.changes > 0) {
-          console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
-        } else {
-          console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
+    let continueParam;
+    do {
+      // Fetch data from the Wikipedia API
+      const response = await axios.get('https://en.wikipedia.org/w/api.php', {
+        params: {
+          action: 'query',
+          titles: article,
+          prop: 'links',
+          format: 'json',
+          pllimit: 'max',
+          plcontinue: continueParam
         }
       });
-    }
+
+      const pages = response.data.query.pages;
+      const pageId = Object.keys(pages)[0];
+      const links = pages[pageId].links;
+
+      if (!links) {
+        res.json([]);
+        return;
+      }
+
+      // Insert the links into the database
+      for (const link of links) {
+        db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
+          if (err) {
+            return console.log(err.message);
+          }
+          if (this.changes > 0) {
+            console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
+          } else {
+            console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
+          }
+        });
+      }
+
+      continueParam = response.data.continue?.plcontinue;
+    } while (continueParam);
   }
 
   // Retrieve the first MAX_LINKS number of links for the specified article

@@ -11,6 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.6.8",
+    "cytoscape": "^3.29.2",
+    "cytoscape-cxtmenu": "^3.5.0",
     "express": "^4.19.2",
     "sqlite3": "^5.1.7"
   },

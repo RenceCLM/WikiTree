@@ -1,3 +1,8 @@
+const cytoscape = require('cytoscape');
+const cxtmenu = require('cytoscape-cxtmenu');
+
+cytoscape.use(cxtmenu);
+
 let cy;
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -5,8 +10,8 @@ document.addEventListener("DOMContentLoaded", function() {
         container: document.getElementById("cy"),
         elements: [
             // nodes
-            { data: { id: 'Richard_Gadd', article: 'Richard_Gadd' }, position: { x: 100, y: 100 } },
-            { data: { id: 'b', article: 'b' }, position: { x: 200, y: 200 } },
+            { data: { id: 'Philippines', article: 'Philippines' }, position: { x: 100, y: 100 } },
+            { data: { id: 'Tarlac City', article: 'Tarlac City' }, position: { x: 200, y: 200 } },
         ],
         style: [
             {
@@ -22,9 +27,71 @@ document.addEventListener("DOMContentLoaded", function() {
         },
     });
 
+    cy.cxtmenu({
+    selector: 'node',
+    commands: [
+        {
+            content: 'Scroll Through Outgoers',
+            select: function(ele) {
+                const outgoers = ele.outgoers().filter(ele => ele.isNode());
+                const elePosition = ele.position();
+                const totalHeight = (outgoers.length - 1) * 50; // 50 is the new vertical distance between nodes
+                const layout = outgoers.layout({
+                    name: 'preset',
+                    positions: (node) => {
+                        const index = outgoers.indexOf(node);
+                        return {
+                            x: elePosition.x - 100, // 100 is the distance from the selected node
+                            y: elePosition.y + index * 50 - totalHeight / 2 // Center the nodes on the y-axis of the selected node
+                        };
+                    },
+                    fit: false // Prevents the viewport from being adjusted
+                });
+                layout.run();
+            }
+        },
+
+        {
+            content: 'Outgoers',
+            select: function(ele){
+                console.log("Selected Node: ", ele.data());
+                const outgoers = ele.outgoers().filter(ele => ele.isNode());
+                console.log("Outgoers: ", outgoers.map(ele => ele.id()).join(', '));
+            }
+        },
+
+        { 
+            content: 'Incomers',
+            select: function(ele){
+                console.log("Selected Node: ", ele.data());
+                const incomers = ele.incomers().filter(ele => ele.isNode());
+                console.log("Incomers: ", incomers.map(ele => ele.id()).join(', '));
+            }
+        },
+
+        {
+            content: 'Successors',
+            select: function(ele){
+                console.log("Selected Node: ", ele.data());
+                const successors = ele.successors().filter(ele => ele.isNode());
+                console.log("Successors: ", successors.map(ele => ele.id()).join(', '));
+            }
+        },
+
+        {
+            content: 'Predecessors',
+            select: function(ele){
+                console.log("Selected Node: ", ele.data());
+                const predecessors = ele.predecessors().filter(ele => ele.isNode());
+                console.log("Predecessors: ", predecessors.map(ele => ele.id()).join(', '));
+            }
+        },
+    ]
+    });
+
     cy.on('tap', 'node', function(evt){
-        const node = evt.target;
-        console.log('Clicked node:', node);
+        const node = evt.target.first();
+        console.log('Clicked node:', node.data());
 
         // Make a request to the route that returns a JSON of all the links to the article
         fetch(`/fetch/${node.data('article')}`)
@@ -59,7 +126,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-function addNode(nodeId, article) {
+function addNode(nodeId) {
     const existingNode = cy.$('#' + nodeId);
 
     if (existingNode.length) { // Node with given ID already exists, select it and center the screen on it
@@ -68,7 +135,7 @@ function addNode(nodeId, article) {
         console.log("Selected node " + nodeId);
     } else { // Node with given ID doesn't exist, create it
         cy.add({
-            data: { id: nodeId, article: article },
+            data: { id: nodeId, name: nodeId, article: nodeId },
         });
         cy.center();
         console.log("Added node " + nodeId);
