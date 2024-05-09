@@ -69,32 +69,44 @@ app.get('/fetch/:article', async (req, res) => {
 
       const pages = response.data.query.pages;
       const pageId = Object.keys(pages)[0];
-      const links = pages[pageId].links;
+      let links = pages[pageId]?.links || []; // ? means "access .links if pages[pageId] is not null or undefined, otherwise links = []"
 
-      if (!links) {
+      links = links.filter(link => link.ns === 0);
+
+      if (links.length === 0) {
         res.json([]);
         return;
       }
 
-      // Insert the links into the database
-      const insertPromises = links.map(link => {
-        return new Promise((resolve, reject) => {
-          db.run(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`, [link.title, article], function(err) {
+      // Start a transaction
+      db.run('BEGIN TRANSACTION', (err) => {
+        if (err) throw err;
+
+        const stmt = db.prepare(`INSERT OR IGNORE INTO nodes(name, article) VALUES(?, ?)`);
+
+        links.forEach(link => {
+          stmt.run([link.title, article], function(err) {
             if (err) {
-              reject(err);
+              console.error(err);
             } else {
               if (this.changes > 0) {
                 console.log(`A row has been inserted with [rowid: ${this.lastID}, name: ${link.title}, article: ${article}]`);
               } else {
                 console.log(`A row with [name: ${link.title}, article: ${article}] already exists in the database.`);
               }
-              resolve();
             }
           });
         });
-      });
 
-      await Promise.all(insertPromises);
+        stmt.finalize((err) => {
+          if (err) throw err;
+
+          // Commit the transaction
+          db.run('COMMIT', (err) => {
+            if (err) throw err;
+          });
+        });
+      });
 
       continueParam = response.data.continue?.plcontinue;
     } while (continueParam);
